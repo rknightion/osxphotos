@@ -205,6 +205,16 @@ class PhotoKitMediaTypeError(PhotoKitError):
 # set it to 0 to restore the legacy "wait forever" behavior.
 PHOTOKIT_REQUEST_TIMEOUT = float(os.environ.get("OSXPHOTOS_PHOTOKIT_TIMEOUT") or 300)
 
+# The live photo request only fetches the paired video's resources (the still and video
+# are then written by separate requests), and a healthy one completes in seconds, while a
+# shared-album live photo whose video was never uploaded stalls until PhotoKit gives up at
+# ~300s. So it can take a much shorter bound than the data requests above, which may be
+# streaming a large original. OSXPHOTOS_PHOTOKIT_LIVE_TIMEOUT overrides it; unset, it
+# follows OSXPHOTOS_PHOTOKIT_TIMEOUT. 0 waits forever.
+PHOTOKIT_LIVE_PHOTO_TIMEOUT = float(
+    os.environ.get("OSXPHOTOS_PHOTOKIT_LIVE_TIMEOUT") or PHOTOKIT_REQUEST_TIMEOUT
+)
+
 
 def _wait_for_event_or_timeout(event, asset_id):
     """Block on a PhotoKit completion event, bounded by PHOTOKIT_REQUEST_TIMEOUT.
@@ -1103,7 +1113,7 @@ class LivePhotoRequest(NSObject):
                     options,
                     handler,
                 )
-                timed_out = _run_event_loop_with_timeout(PHOTOKIT_REQUEST_TIMEOUT)
+                timed_out = _run_event_loop_with_timeout(PHOTOKIT_LIVE_PHOTO_TIMEOUT)
             except KeyboardInterrupt:
                 AppHelper.stopEventLoop()
             finally:
@@ -1115,7 +1125,7 @@ class LivePhotoRequest(NSObject):
                 request_state["abandoned"] = True
                 self.manager.cancelImageRequest_(request_id)
                 logger.warning(
-                    f"PhotoKit live photo request timed out after {PHOTOKIT_REQUEST_TIMEOUT}s "
+                    f"PhotoKit live photo request timed out after {PHOTOKIT_LIVE_PHOTO_TIMEOUT}s "
                     f"for asset {self.asset.localIdentifier()}; treating it as missing"
                 )
                 return []
